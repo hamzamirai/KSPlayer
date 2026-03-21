@@ -10,12 +10,12 @@ import AVFAudio
 import CoreAudio
 
 public final class AudioUnitPlayer: AudioOutput {
-    private var audioUnitForOutput: AudioUnit!
-    private var currentRenderReadOffset = UInt32(0)
-    private var sourceNodeAudioFormat: AVAudioFormat?
-    private var sampleSize = UInt32(MemoryLayout<Float>.size)
-    public weak var renderSource: OutputRenderSourceDelegate?
-    private var currentRender: AudioFrame? {
+    private nonisolated(unsafe) var audioUnitForOutput: AudioUnit!
+    private nonisolated(unsafe) var currentRenderReadOffset = UInt32(0)
+    private nonisolated(unsafe) var sourceNodeAudioFormat: AVAudioFormat?
+    private nonisolated(unsafe) var sampleSize = UInt32(MemoryLayout<Float>.size)
+    public nonisolated(unsafe) weak var renderSource: OutputRenderSourceDelegate?
+    private nonisolated(unsafe) var currentRender: AudioFrame? {
         didSet {
             if currentRender == nil {
                 currentRenderReadOffset = 0
@@ -40,8 +40,8 @@ public final class AudioUnitPlayer: AudioOutput {
 
     public var playbackRate: Float = 1
     public var volume: Float = 1
-    public var isMuted: Bool = false
-    private var outputLatency = TimeInterval(0)
+    public nonisolated(unsafe) var isMuted: Bool = false
+    private nonisolated(unsafe) var outputLatency = TimeInterval(0)
     public init() {
         var descriptionForOutput = AudioComponentDescription()
         descriptionForOutput.componentType = kAudioUnitType_Output
@@ -107,7 +107,7 @@ public final class AudioUnitPlayer: AudioOutput {
 }
 
 extension AudioUnitPlayer {
-    private func renderCallbackStruct() -> AURenderCallbackStruct {
+    private nonisolated func renderCallbackStruct() -> AURenderCallbackStruct {
         var inputCallbackStruct = AURenderCallbackStruct()
         inputCallbackStruct.inputProcRefCon = Unmanaged.passUnretained(self).toOpaque()
         inputCallbackStruct.inputProc = { refCon, _, _, _, inNumberFrames, ioData in
@@ -121,7 +121,7 @@ extension AudioUnitPlayer {
         return inputCallbackStruct
     }
 
-    private func addRenderNotify(audioUnit: AudioUnit) {
+    private nonisolated func addRenderNotify(audioUnit: AudioUnit) {
         AudioUnitAddRenderNotify(audioUnit, { refCon, ioActionFlags, inTimeStamp, _, _, _ in
             let `self` = Unmanaged<AudioUnitPlayer>.fromOpaque(refCon).takeUnretainedValue()
             autoreleasepool {
@@ -133,7 +133,7 @@ extension AudioUnitPlayer {
         }, Unmanaged.passUnretained(self).toOpaque())
     }
 
-    private func audioPlayerShouldInputData(ioData: UnsafeMutableAudioBufferListPointer, numberOfFrames: UInt32) {
+    private nonisolated func audioPlayerShouldInputData(ioData: UnsafeMutableAudioBufferListPointer, numberOfFrames: UInt32) {
         var ioDataWriteOffset = 0
         var numberOfSamples = numberOfFrames
         while numberOfSamples > 0 {
@@ -182,7 +182,7 @@ extension AudioUnitPlayer {
         }
     }
 
-    private func audioPlayerDidRenderSample(sampleTimestamp _: AudioTimeStamp) {
+    private nonisolated func audioPlayerDidRenderSample(sampleTimestamp _: AudioTimeStamp) {
         if let currentRender {
             let currentPreparePosition = currentRender.timestamp + currentRender.duration * Int64(currentRenderReadOffset) / Int64(currentRender.numberOfSamples)
             if currentPreparePosition > 0 {

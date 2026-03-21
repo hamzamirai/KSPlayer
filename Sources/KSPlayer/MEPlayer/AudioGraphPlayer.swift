@@ -11,19 +11,19 @@ import CoreAudio
 
 public final class AudioGraphPlayer: AudioOutput, AudioDynamicsProcessor {
     public private(set) var audioUnitForDynamicsProcessor: AudioUnit
-    private let graph: AUGraph
+    private nonisolated(unsafe) let graph: AUGraph
     private var audioUnitForMixer: AudioUnit!
     private var audioUnitForTimePitch: AudioUnit!
     private var audioUnitForOutput: AudioUnit!
-    private var currentRenderReadOffset = UInt32(0)
-    private var sourceNodeAudioFormat: AVAudioFormat?
-    private var sampleSize = UInt32(MemoryLayout<Float>.size)
+    private nonisolated(unsafe) var currentRenderReadOffset = UInt32(0)
+    private nonisolated(unsafe) var sourceNodeAudioFormat: AVAudioFormat?
+    private nonisolated(unsafe) var sampleSize = UInt32(MemoryLayout<Float>.size)
     #if os(macOS)
     private var volumeBeforeMute: Float = 0.0
     #endif
-    private var outputLatency = TimeInterval(0)
-    public weak var renderSource: OutputRenderSourceDelegate?
-    private var currentRender: AudioFrame? {
+    private nonisolated(unsafe) var outputLatency = TimeInterval(0)
+    public nonisolated(unsafe) weak var renderSource: OutputRenderSourceDelegate?
+    private nonisolated(unsafe) var currentRender: AudioFrame? {
         didSet {
             if currentRender == nil {
                 currentRenderReadOffset = 0
@@ -217,7 +217,7 @@ public final class AudioGraphPlayer: AudioOutput, AudioDynamicsProcessor {
 }
 
 extension AudioGraphPlayer {
-    private func renderCallbackStruct() -> AURenderCallbackStruct {
+    private nonisolated func renderCallbackStruct() -> AURenderCallbackStruct {
         var inputCallbackStruct = AURenderCallbackStruct()
         inputCallbackStruct.inputProcRefCon = Unmanaged.passUnretained(self).toOpaque()
         inputCallbackStruct.inputProc = { refCon, _, _, _, inNumberFrames, ioData in
@@ -231,7 +231,7 @@ extension AudioGraphPlayer {
         return inputCallbackStruct
     }
 
-    private func addRenderNotify(audioUnit: AudioUnit) {
+    private nonisolated func addRenderNotify(audioUnit: AudioUnit) {
         AudioUnitAddRenderNotify(audioUnit, { refCon, ioActionFlags, inTimeStamp, _, _, _ in
             let `self` = Unmanaged<AudioGraphPlayer>.fromOpaque(refCon).takeUnretainedValue()
             autoreleasepool {
@@ -243,7 +243,7 @@ extension AudioGraphPlayer {
         }, Unmanaged.passUnretained(self).toOpaque())
     }
 
-    private func audioPlayerShouldInputData(ioData: UnsafeMutableAudioBufferListPointer, numberOfFrames: UInt32) {
+    private nonisolated func audioPlayerShouldInputData(ioData: UnsafeMutableAudioBufferListPointer, numberOfFrames: UInt32) {
         var ioDataWriteOffset = 0
         var numberOfSamples = numberOfFrames
         while numberOfSamples > 0 {
@@ -288,7 +288,7 @@ extension AudioGraphPlayer {
         }
     }
 
-    private func audioPlayerDidRenderSample(sampleTimestamp _: AudioTimeStamp) {
+    private nonisolated func audioPlayerDidRenderSample(sampleTimestamp _: AudioTimeStamp) {
         if let currentRender {
             let currentPreparePosition = currentRender.timestamp + currentRender.duration * Int64(currentRenderReadOffset) / Int64(currentRender.numberOfSamples)
             if currentPreparePosition > 0 {

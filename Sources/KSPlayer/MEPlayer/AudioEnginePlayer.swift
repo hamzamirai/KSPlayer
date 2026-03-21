@@ -16,6 +16,7 @@ public protocol AudioOutput: FrameOutput {
     func prepare(audioFormat: AVAudioFormat)
 }
 
+@MainActor
 public protocol AudioDynamicsProcessor {
     var audioUnitForDynamicsProcessor: AudioUnit { get }
 }
@@ -100,21 +101,21 @@ public final class AudioEngineDynamicsPlayer: AudioEnginePlayer, AudioDynamicsPr
     }
 }
 
-public class AudioEnginePlayer: AudioOutput {
+public class AudioEnginePlayer: AudioOutput, @unchecked Sendable {
     public let engine = AVAudioEngine()
     private var sourceNode: AVAudioSourceNode?
-    private var sourceNodeAudioFormat: AVAudioFormat?
+    private nonisolated(unsafe) var sourceNodeAudioFormat: AVAudioFormat?
 
 //    private let reverb = AVAudioUnitReverb()
 //    private let nbandEQ = AVAudioUnitEQ()
 //    private let distortion = AVAudioUnitDistortion()
 //    private let delay = AVAudioUnitDelay()
     private let timePitch = AVAudioUnitTimePitch()
-    private var sampleSize = UInt32(MemoryLayout<Float>.size)
-    private var currentRenderReadOffset = UInt32(0)
-    private var outputLatency = TimeInterval(0)
-    public weak var renderSource: OutputRenderSourceDelegate?
-    private var currentRender: AudioFrame? {
+    private nonisolated(unsafe) var sampleSize = UInt32(MemoryLayout<Float>.size)
+    private nonisolated(unsafe) var currentRenderReadOffset = UInt32(0)
+    private nonisolated(unsafe) var outputLatency = TimeInterval(0)
+    public nonisolated(unsafe) weak var renderSource: OutputRenderSourceDelegate?
+    private nonisolated(unsafe) var currentRender: AudioFrame? {
         didSet {
             if currentRender == nil {
                 currentRenderReadOffset = 0
@@ -175,13 +176,7 @@ public class AudioEnginePlayer: AudioOutput {
         let isRunning = engine.isRunning
         engine.stop()
         engine.reset()
-        sourceNode = AVAudioSourceNode(format: audioFormat) { [weak self] _, timestamp, frameCount, audioBufferList in
-            if timestamp.pointee.mSampleTime == 0 {
-                return noErr
-            }
-            self?.audioPlayerShouldInputData(ioData: UnsafeMutableAudioBufferListPointer(audioBufferList), numberOfFrames: frameCount)
-            return noErr
-        }
+        sourceNode = makeSourceNode(format: audioFormat)
         guard let sourceNode else {
             return
         }
@@ -202,6 +197,19 @@ public class AudioEnginePlayer: AudioOutput {
             DispatchQueue.main.async { [weak self] in
                 self?.play()
             }
+        }
+    }
+
+    private nonisolated func makeSourceNode(format: AVAudioFormat) -> AVAudioSourceNode {
+        AVAudioSourceNode(format: format) { [weak self] _, timestamp, frameCount, audioBufferList in
+            if timestamp.pointee.mSampleTime == 0 {
+                return noErr
+            }
+            self?.audioPlayerShouldInputData(
+                ioData: UnsafeMutableAudioBufferListPointer(audioBufferList),
+                numberOfFrames: frameCount
+            )
+            return noErr
         }
     }
 
@@ -233,7 +241,7 @@ public class AudioEnginePlayer: AudioOutput {
         #endif
     }
 
-    private func addRenderNotify(audioUnit: AudioUnit) {
+    private nonisolated func addRenderNotify(audioUnit: AudioUnit) {
         AudioUnitAddRenderNotify(audioUnit, { refCon, ioActionFlags, inTimeStamp, _, _, _ in
             let `self` = Unmanaged<AudioEnginePlayer>.fromOpaque(refCon).takeUnretainedValue()
             autoreleasepool {
@@ -265,7 +273,7 @@ public class AudioEnginePlayer: AudioOutput {
 //        _ = AudioUnitSetProperty(audioUnit, kAudioUnitProperty_SetRenderCallback, kAudioUnitScope_Input, 0, &inputCallbackStruct, UInt32(MemoryLayout<AURenderCallbackStruct>.size))
 //    }
 
-    private func audioPlayerShouldInputData(ioData: UnsafeMutableAudioBufferListPointer, numberOfFrames: UInt32) {
+    private nonisolated func audioPlayerShouldInputData(ioData: UnsafeMutableAudioBufferListPointer, numberOfFrames: UInt32) {
         var ioDataWriteOffset = 0
         var numberOfSamples = numberOfFrames
         while numberOfSamples > 0 {
@@ -310,7 +318,7 @@ public class AudioEnginePlayer: AudioOutput {
         }
     }
 
-    private func audioPlayerDidRenderSample(sampleTimestamp _: AudioTimeStamp) {
+    private nonisolated func audioPlayerDidRenderSample(sampleTimestamp _: AudioTimeStamp) {
         if let currentRender {
             let currentPreparePosition = currentRender.timestamp + currentRender.duration * Int64(currentRenderReadOffset) / Int64(currentRender.numberOfSamples)
             if currentPreparePosition > 0 {
