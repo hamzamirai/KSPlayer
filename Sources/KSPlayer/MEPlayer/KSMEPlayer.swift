@@ -13,27 +13,25 @@ import UIKit
 import AppKit
 #endif
 
+@MainActor
 public class KSMEPlayer: NSObject {
     private var loopCount = 1
     private var playerItem: MEPlayerItem
     public let audioOutput: AudioOutput
     private var options: KSOptions
+    // Serial queue for audio engine rebuild (50-100ms), keeping it off the main thread.
+    private let audioPrepQueue = DispatchQueue(label: "com.ksplayer.audio-prep", qos: .userInitiated)
     private var bufferingCountDownTimer: Timer?
     public private(set) var videoOutput: (VideoOutput & UIView)? {
         didSet {
             oldValue?.invalidate()
-            runOnMainThread {
-                oldValue?.removeFromSuperview()
-            }
+            oldValue?.removeFromSuperview()
         }
     }
 
     public private(set) var bufferingProgress = 0 {
         willSet {
-            runOnMainThread { [weak self] in
-                guard let self else { return }
-                delegate?.changeBuffering(player: self, progress: newValue)
-            }
+            delegate?.changeBuffering(player: self, progress: newValue)
         }
     }
 
@@ -105,10 +103,7 @@ public class KSMEPlayer: NSObject {
             if playbackState != oldValue {
                 playOrPause()
                 if playbackState == .finished {
-                    runOnMainThread { [weak self] in
-                        guard let self else { return }
-                        delegate?.finish(player: self, error: nil)
-                    }
+                    delegate?.finish(player: self, error: nil)
                 }
             }
         }
@@ -138,12 +133,14 @@ public class KSMEPlayer: NSObject {
     }
 
     deinit {
-        #if !os(macOS)
-        try? AVAudioSession.sharedInstance().setPreferredOutputNumberOfChannels(2)
-        #endif
-        NotificationCenter.default.removeObserver(self)
-        videoOutput?.invalidate()
-        playerItem.shutdown()
+        MainActor.assumeIsolated {
+            #if !os(macOS)
+            try? AVAudioSession.sharedInstance().setPreferredOutputNumberOfChannels(2)
+            #endif
+            NotificationCenter.default.removeObserver(self)
+            videoOutput?.invalidate()
+            playerItem.shutdown()
+        }
     }
 }
 
@@ -151,18 +148,15 @@ public class KSMEPlayer: NSObject {
 
 private extension KSMEPlayer {
     func playOrPause() {
-        runOnMainThread { [weak self] in
-            guard let self else { return }
-            let isPaused = !(self.playbackState == .playing && self.loadState == .playable)
-            if isPaused {
-                self.audioOutput.pause()
-                self.videoOutput?.pause()
-            } else {
-                self.audioOutput.play()
-                self.videoOutput?.play()
-            }
-            self.delegate?.changeLoadState(player: self)
+        let isPaused = !(playbackState == .playing && loadState == .playable)
+        if isPaused {
+            audioOutput.pause()
+            videoOutput?.pause()
+        } else {
+            audioOutput.play()
+            videoOutput?.play()
         }
+        delegate?.changeLoadState(player: self)
     }
 
     @objc private func spatialCapabilityChange(notification _: Notification) {
@@ -191,51 +185,83 @@ private extension KSMEPlayer {
 }
 
 extension KSMEPlayer: MEPlayerDelegate {
-    func sourceDidOpened() {
+    // MEPlayerDelegate methods are called from MEPlayerItem's background OperationQueue.
+    // They are nonisolated entry points that dispatch work to @MainActor via GCD (cheaper than Task for hot paths).
+    nonisolated func sourceDidOpened() {
+        DispatchQueue.main.async { [weak self] in
+            self?.finishSourceDidOpenOnMain()
+        }
+    }
+
+    @MainActor
+    private func finishSourceDidOpenOnMain() {
         isReadyToPlay = true
         options.readyTime = CACurrentMediaTime()
-        let vidoeTracks = tracks(mediaType: .video)
-        if vidoeTracks.isEmpty {
+        let videoTracks = tracks(mediaType: .video)
+        if videoTracks.isEmpty {
             videoOutput = nil
         }
-        let audioDescriptor = tracks(mediaType: .audio).first { $0.isEnabled }.flatMap {
-            $0 as? FFmpegAssetTrack
-        }?.audioDescriptor
-        runOnMainThread { [weak self] in
-            guard let self else { return }
-            if let audioDescriptor {
-                KSLog("[audio] audio type: \(audioOutput) prepare audioFormat )")
-                audioOutput.prepare(audioFormat: audioDescriptor.audioFormat)
-            }
-            if let controlTimebase = videoOutput?.displayLayer.controlTimebase, options.startPlayTime > 1 {
-                CMTimebaseSetTime(controlTimebase, time: CMTimeMake(value: Int64(options.startPlayTime), timescale: 1))
-            }
-            delegate?.readyToPlay(player: self)
-        }
-    }
-
-    func sourceDidFailed(error: NSError?) {
-        runOnMainThread { [weak self] in
-            guard let self else { return }
-            self.delegate?.finish(player: self, error: error)
-        }
-    }
-
-    func sourceDidFinished() {
-        runOnMainThread { [weak self] in
-            guard let self else { return }
-            if self.options.isLoopPlay {
-                self.loopCount += 1
-                self.delegate?.playBack(player: self, loopCount: self.loopCount)
-                self.audioOutput.play()
-                self.videoOutput?.play()
+        let audioDescriptor = tracks(mediaType: .audio).first { $0.isEnabled }
+            .flatMap { $0 as? FFmpegAssetTrack }?.audioDescriptor
+        if let audioDescriptor {
+            KSLog("[audio] audio type: \(audioOutput) prepare audioFormat)")
+            let audioFormat = audioDescriptor.audioFormat
+            // Audio engine rebuild is heavy (50-100ms). Dispatch to background to avoid blocking main thread.
+            // AudioEnginePlayer is @unchecked Sendable; safe to capture across queues.
+            if let enginePlayer = audioOutput as? AudioEnginePlayer {
+                audioPrepQueue.async {
+                    enginePlayer.prepare(audioFormat: audioFormat)
+                }
             } else {
-                self.playbackState = .finished
+                audioOutput.prepare(audioFormat: audioFormat)
             }
+        }
+        if let controlTimebase = videoOutput?.displayLayer.controlTimebase, options.startPlayTime > 1 {
+            CMTimebaseSetTime(controlTimebase, time: CMTimeMake(value: Int64(options.startPlayTime), timescale: 1))
+        }
+        // Note: readyToPlay may fire before audio prep finishes on audioPrepQueue.
+        // This is intentional — readyToPlay signals UI readiness, not audio readiness.
+        delegate?.readyToPlay(player: self)
+    }
+
+    nonisolated func sourceDidFailed(error: NSError?) {
+        DispatchQueue.main.async { [weak self] in
+            self?.handleSourceDidFailed(error: error)
         }
     }
 
-    func sourceDidChange(loadingState: LoadingState) {
+    @MainActor
+    private func handleSourceDidFailed(error: NSError?) {
+        delegate?.finish(player: self, error: error)
+    }
+
+    nonisolated func sourceDidFinished() {
+        DispatchQueue.main.async { [weak self] in
+            self?.handleSourceDidFinished()
+        }
+    }
+
+    @MainActor
+    private func handleSourceDidFinished() {
+        if options.isLoopPlay {
+            loopCount += 1
+            delegate?.playBack(player: self, loopCount: loopCount)
+            audioOutput.play()
+            videoOutput?.play()
+        } else {
+            playbackState = .finished
+        }
+    }
+
+    // Hot path: called ~20 Hz from MEPlayerItem timer. Use GCD to avoid Task allocation overhead.
+    nonisolated func sourceDidChange(loadingState: LoadingState) {
+        DispatchQueue.main.async { [weak self] in
+            self?.handleLoadingStateChange(loadingState)
+        }
+    }
+
+    @MainActor
+    private func handleLoadingStateChange(_ loadingState: LoadingState) {
         if loadingState.isEndOfFile {
             playableTime = duration
         } else {
@@ -245,10 +271,7 @@ extension KSMEPlayer: MEPlayerDelegate {
             if !loadingState.isEndOfFile, loadingState.frameCount == 0, loadingState.packetCount == 0, options.preferredForwardBufferDuration != 0 {
                 loadState = .loading
                 if playbackState == .playing {
-                    runOnMainThread { [weak self] in
-                        // 在主线程更新进度
-                        self?.bufferingProgress = 0
-                    }
+                    bufferingProgress = 0
                 }
             }
         } else {
@@ -270,10 +293,7 @@ extension KSMEPlayer: MEPlayerDelegate {
                 }
             }
             if playbackState == .playing {
-                runOnMainThread { [weak self] in
-                    // 在主线程更新进度
-                    self?.bufferingProgress = progress
-                }
+                bufferingProgress = progress
             }
         }
         if duration == 0, playbackState == .playing, loadState == .playable {
@@ -283,7 +303,7 @@ extension KSMEPlayer: MEPlayerDelegate {
         }
     }
 
-    func sourceDidChange(oldBitRate: Int64, newBitrate: Int64) {
+    nonisolated func sourceDidChange(oldBitRate: Int64, newBitrate: Int64) {
         KSLog("oldBitRate \(oldBitRate) change to newBitrate \(newBitrate)")
     }
 }
@@ -355,27 +375,27 @@ extension KSMEPlayer: MediaPlayerProtocol {
     public func seek(time: TimeInterval, completion: @escaping ((Bool) -> Void)) {
         let time = max(time, 0)
         playbackState = .seeking
-        runOnMainThread { [weak self] in
-            self?.bufferingProgress = 0
-        }
+        bufferingProgress = 0
         let seekTime: TimeInterval
         if time >= duration, options.isLoopPlay {
             seekTime = 0
         } else {
             seekTime = time
         }
+        // Capture completion as nonisolated(unsafe) since MEPlayerItem calls back on its
+        // background OperationQueue and ((Bool) -> Void) is not @Sendable.
+        nonisolated(unsafe) let localCompletion = completion
         playerItem.seek(time: seekTime) { [weak self] result in
-            guard let self else { return }
-            if result {
-                self.audioOutput.flush()
-                runOnMainThread { [weak self] in
-                    guard let self else { return }
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if result {
+                    self.audioOutput.flush()
                     if let controlTimebase = self.videoOutput?.displayLayer.controlTimebase {
                         CMTimebaseSetTime(controlTimebase, time: CMTimeMake(value: Int64(self.currentPlaybackTime), timescale: 1))
                     }
                 }
+                localCompletion(result)
             }
-            completion(result)
         }
     }
 
@@ -472,7 +492,7 @@ extension KSMEPlayer: MediaPlayerProtocol {
 }
 
 @available(tvOS 14.0, *)
-extension KSMEPlayer: AVPictureInPictureSampleBufferPlaybackDelegate {
+extension KSMEPlayer: @preconcurrency AVPictureInPictureSampleBufferPlaybackDelegate {
     public func pictureInPictureController(_: AVPictureInPictureController, setPlaying playing: Bool) {
         playing ? play() : pause()
     }
@@ -500,21 +520,16 @@ extension KSMEPlayer: AVPictureInPictureSampleBufferPlaybackDelegate {
 }
 
 @available(macOS 12.0, iOS 15.0, tvOS 15.0, *)
-extension KSMEPlayer: AVPlaybackCoordinatorPlaybackControlDelegate {
+extension KSMEPlayer: @preconcurrency AVPlaybackCoordinatorPlaybackControlDelegate {
     public func playbackCoordinator(_: AVDelegatingPlaybackCoordinator, didIssue playCommand: AVDelegatingPlaybackCoordinatorPlayCommand, completionHandler: @escaping () -> Void) {
         guard playCommand.expectedCurrentItemIdentifier == (playbackCoordinator as? AVDelegatingPlaybackCoordinator)?.currentItemIdentifier else {
             completionHandler()
             return
         }
-        DispatchQueue.main.async { [weak self] in
-            guard let self else {
-                return
-            }
-            if self.playbackState != .playing {
-                self.play()
-            }
-            completionHandler()
+        if playbackState != .playing {
+            play()
         }
+        completionHandler()
     }
 
     public func playbackCoordinator(_: AVDelegatingPlaybackCoordinator, didIssue pauseCommand: AVDelegatingPlaybackCoordinatorPauseCommand, completionHandler: @escaping () -> Void) {
@@ -522,15 +537,10 @@ extension KSMEPlayer: AVPlaybackCoordinatorPlaybackControlDelegate {
             completionHandler()
             return
         }
-        DispatchQueue.main.async { [weak self] in
-            guard let self else {
-                return
-            }
-            if self.playbackState != .paused {
-                self.pause()
-            }
-            completionHandler()
+        if playbackState != .paused {
+            pause()
         }
+        completionHandler()
     }
 
     public func playbackCoordinator(_: AVDelegatingPlaybackCoordinator, didIssue seekCommand: AVDelegatingPlaybackCoordinatorSeekCommand) async {
@@ -549,19 +559,14 @@ extension KSMEPlayer: AVPlaybackCoordinatorPlaybackControlDelegate {
             completionHandler()
             return
         }
-        DispatchQueue.main.async { [weak self] in
-            guard let self else {
-                return
-            }
-            guard self.loadState != .playable, let countDown = bufferingCommand.completionDueDate?.timeIntervalSinceNow else {
-                completionHandler()
-                return
-            }
-            self.bufferingCountDownTimer?.invalidate()
-            self.bufferingCountDownTimer = nil
-            self.bufferingCountDownTimer = Timer(timeInterval: countDown, repeats: false) { _ in
-                completionHandler()
-            }
+        guard loadState != .playable, let countDown = bufferingCommand.completionDueDate?.timeIntervalSinceNow else {
+            completionHandler()
+            return
+        }
+        bufferingCountDownTimer?.invalidate()
+        bufferingCountDownTimer = nil
+        bufferingCountDownTimer = Timer(timeInterval: countDown, repeats: false) { _ in
+            completionHandler()
         }
     }
 }

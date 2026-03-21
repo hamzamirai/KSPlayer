@@ -64,6 +64,7 @@ public protocol KSPlayerLayerDelegate: AnyObject {
     func player(layer: KSPlayerLayer, bufferedCount: Int, consumeTime: TimeInterval)
 }
 
+@MainActor
 open class KSPlayerLayer: NSObject {
     public weak var delegate: KSPlayerLayerDelegate?
     @Published
@@ -165,7 +166,7 @@ open class KSPlayerLayer: NSObject {
             if state != newValue {
                 runOnMainThread { [weak self] in
                     guard let self else { return }
-                    KSLog("playerStateDidChange - \(newValue)")
+                    KSLog(level: .info, "playerStateDidChange - \(newValue)")
                     self.delegate?.player(layer: self, state: newValue)
                 }
             }
@@ -182,7 +183,11 @@ open class KSPlayerLayer: NSObject {
             self.state = .bufferFinished
         }
         if self.player.isPlaying {
-            MPNowPlayingInfoCenter.default().nowPlayingInfo?[MPNowPlayingInfoPropertyElapsedPlaybackTime] = self.player.currentPlaybackTime
+            let now = CACurrentMediaTime()
+            if now - self.lastNowPlayingUpdate >= 1.0 {
+                self.lastNowPlayingUpdate = now
+                MPNowPlayingInfoCenter.default().nowPlayingInfo?[MPNowPlayingInfoPropertyElapsedPlaybackTime] = self.player.currentPlaybackTime
+            }
         }
     }
 
@@ -192,6 +197,7 @@ open class KSPlayerLayer: NSObject {
     private var bufferedCount = 0
     private var shouldSeekTo: TimeInterval = 0
     private var startTime: TimeInterval = 0
+    private var lastNowPlayingUpdate: TimeInterval = 0
     public init(url: URL, isAutoPlay: Bool = KSOptions.isAutoPlay, options: KSOptions, delegate: KSPlayerLayerDelegate? = nil) {
         self.url = url
         self.options = options
@@ -238,24 +244,26 @@ open class KSPlayerLayer: NSObject {
     }
 
     deinit {
-        if #available(iOS 15.0, tvOS 15.0, macOS 12.0, *) {
-            player.pipController?.contentSource = nil
+        MainActor.assumeIsolated {
+            if #available(iOS 15.0, tvOS 15.0, macOS 12.0, *) {
+                player.pipController?.contentSource = nil
+            }
+            NotificationCenter.default.removeObserver(self)
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+            MPRemoteCommandCenter.shared().playCommand.removeTarget(nil)
+            MPRemoteCommandCenter.shared().pauseCommand.removeTarget(nil)
+            MPRemoteCommandCenter.shared().togglePlayPauseCommand.removeTarget(nil)
+            MPRemoteCommandCenter.shared().stopCommand.removeTarget(nil)
+            MPRemoteCommandCenter.shared().nextTrackCommand.removeTarget(nil)
+            MPRemoteCommandCenter.shared().previousTrackCommand.removeTarget(nil)
+            MPRemoteCommandCenter.shared().changeRepeatModeCommand.removeTarget(nil)
+            MPRemoteCommandCenter.shared().changePlaybackRateCommand.removeTarget(nil)
+            MPRemoteCommandCenter.shared().skipForwardCommand.removeTarget(nil)
+            MPRemoteCommandCenter.shared().skipBackwardCommand.removeTarget(nil)
+            MPRemoteCommandCenter.shared().changePlaybackPositionCommand.removeTarget(nil)
+            MPRemoteCommandCenter.shared().enableLanguageOptionCommand.removeTarget(nil)
+            options.playerLayerDeinit()
         }
-        NotificationCenter.default.removeObserver(self)
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
-        MPRemoteCommandCenter.shared().playCommand.removeTarget(nil)
-        MPRemoteCommandCenter.shared().pauseCommand.removeTarget(nil)
-        MPRemoteCommandCenter.shared().togglePlayPauseCommand.removeTarget(nil)
-        MPRemoteCommandCenter.shared().stopCommand.removeTarget(nil)
-        MPRemoteCommandCenter.shared().nextTrackCommand.removeTarget(nil)
-        MPRemoteCommandCenter.shared().previousTrackCommand.removeTarget(nil)
-        MPRemoteCommandCenter.shared().changeRepeatModeCommand.removeTarget(nil)
-        MPRemoteCommandCenter.shared().changePlaybackRateCommand.removeTarget(nil)
-        MPRemoteCommandCenter.shared().skipForwardCommand.removeTarget(nil)
-        MPRemoteCommandCenter.shared().skipBackwardCommand.removeTarget(nil)
-        MPRemoteCommandCenter.shared().changePlaybackPositionCommand.removeTarget(nil)
-        MPRemoteCommandCenter.shared().enableLanguageOptionCommand.removeTarget(nil)
-        options.playerLayerDeinit()
     }
 
     public func set(url: URL, options: KSOptions) {
@@ -472,7 +480,7 @@ extension KSPlayerLayer: MediaPlayerDelegate {
 // MARK: - AVPictureInPictureControllerDelegate
 
 @available(tvOS 14.0, *)
-extension KSPlayerLayer: AVPictureInPictureControllerDelegate {
+extension KSPlayerLayer: @preconcurrency AVPictureInPictureControllerDelegate {
     public func pictureInPictureControllerDidStopPictureInPicture(_: AVPictureInPictureController) {
         player.pipController?.stop(restoreUserInterface: false)
     }

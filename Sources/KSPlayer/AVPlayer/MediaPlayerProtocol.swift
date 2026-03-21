@@ -13,6 +13,7 @@ import UIKit
 import AppKit
 #endif
 
+@MainActor
 public protocol MediaPlayback: AnyObject {
     var duration: TimeInterval { get }
     var fileSize: Double { get }
@@ -24,11 +25,11 @@ public protocol MediaPlayback: AnyObject {
     func seek(time: TimeInterval, completion: @escaping ((Bool) -> Void))
 }
 
-public class DynamicInfo: ObservableObject {
-    private let metadataBlock: () -> [String: String]
-    private let bytesReadBlock: () -> Int64
-    private let audioBitrateBlock: () -> Int
-    private let videoBitrateBlock: () -> Int
+@Observable public class DynamicInfo {
+    private let metadataBlock: @Sendable () -> [String: String]
+    private let bytesReadBlock: @Sendable () -> Int64
+    private let audioBitrateBlock: @Sendable () -> Int
+    private let videoBitrateBlock: @Sendable () -> Int
     public var metadata: [String: String] {
         metadataBlock()
     }
@@ -45,12 +46,11 @@ public class DynamicInfo: ObservableObject {
         videoBitrateBlock()
     }
 
-    @Published
     public var displayFPS = 0.0
     public var audioVideoSyncDiff = 0.0
     public var droppedVideoFrameCount = UInt32(0)
     public var droppedVideoPacketCount = UInt32(0)
-    init(metadata: @escaping () -> [String: String], bytesRead: @escaping () -> Int64, audioBitrate: @escaping () -> Int, videoBitrate: @escaping () -> Int) {
+    init(metadata: @escaping @Sendable () -> [String: String], bytesRead: @escaping @Sendable () -> Int64, audioBitrate: @escaping @Sendable () -> Int, videoBitrate: @escaping @Sendable () -> Int) {
         metadataBlock = metadata
         bytesReadBlock = bytesRead
         audioBitrateBlock = audioBitrate
@@ -64,6 +64,7 @@ public struct Chapter {
     public let title: String
 }
 
+@MainActor
 public protocol MediaPlayerProtocol: MediaPlayback {
     var delegate: MediaPlayerDelegate? { get set }
     var view: UIView? { get }

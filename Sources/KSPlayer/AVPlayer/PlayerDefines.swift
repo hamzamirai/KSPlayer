@@ -186,7 +186,7 @@ extension CapacityProtocol {
     }
 }
 
-public struct LoadingState {
+public struct LoadingState: Sendable {
     public let loadedTime: TimeInterval
     public let progress: TimeInterval
     public let packetCount: Int

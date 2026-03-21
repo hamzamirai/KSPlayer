@@ -63,6 +63,7 @@ extension ObjectQueueItem {
     var cmtime: CMTime { timebase.cmtime(for: timestamp) }
 }
 
+@MainActor
 public protocol FrameOutput: AnyObject {
     var renderSource: OutputRenderSourceDelegate? { get set }
     func pause()
@@ -79,13 +80,17 @@ protocol MEFrame: ObjectQueueItem {
 // for MEPlayer
 public extension KSOptions {
     /// 开启VR模式的陀飞轮
-    static var enableSensor = true
-    static var stackSize = 65536
-    static var isClearVideoWhereReplace = true
-    static var audioPlayerType: AudioOutput.Type = AudioEnginePlayer.self
-    static var videoPlayerType: (VideoOutput & UIView).Type = MetalPlayView.self
-    static var yadifMode = 1
-    static var deInterlaceAddIdet = false
+    @MainActor static var enableSensor = true
+    /// nonisolated(unsafe): read on MEPlayerItem's background OperationQueue in readThread(); value is set once at app startup
+    nonisolated(unsafe) static var stackSize = 65536
+    @MainActor static var isClearVideoWhereReplace = true
+    /// nonisolated(unsafe): read from background Resample.swift audio format detection; set once at app startup
+    nonisolated(unsafe) static var audioPlayerType: AudioOutput.Type = AudioEnginePlayer.self
+    @MainActor static var videoPlayerType: (VideoOutput & UIView).Type = MetalPlayView.self
+    /// nonisolated(unsafe): read from KSOptions.process() called on MEPlayerItem background queue; set once at app startup
+    nonisolated(unsafe) static var yadifMode = 1
+    /// nonisolated(unsafe): read from KSOptions.process() called on MEPlayerItem background queue; set once at app startup
+    nonisolated(unsafe) static var deInterlaceAddIdet = false
     static func colorSpace(ycbcrMatrix: CFString?, transferFunction: CFString?) -> CGColorSpace? {
         switch ycbcrMatrix {
         case kCVImageBufferYCbCrMatrix_ITU_R_709_2:
@@ -174,7 +179,7 @@ enum MECodecState {
     case finished
 }
 
-public struct Timebase {
+public struct Timebase: Sendable {
     static let defaultValue = Timebase(num: 1, den: 1)
     public let num: Int32
     public let den: Int32

@@ -11,10 +11,12 @@ import CoreMedia
 #if canImport(MetalKit)
 import MetalKit
 #endif
+@MainActor
 public protocol DisplayLayerDelegate: NSObjectProtocol {
     func change(displayLayer: AVSampleBufferDisplayLayer)
 }
 
+@MainActor
 public protocol VideoOutput: FrameOutput {
     var displayLayerDelegate: DisplayLayerDelegate? { get set }
     var options: KSOptions { get set }

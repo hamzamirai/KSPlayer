@@ -231,7 +231,7 @@ open class KSOptions {
     }
 
     open func videoFrameMaxCount(fps _: Float, naturalSize _: CGSize, isLive: Bool) -> UInt8 {
-        isLive ? 4 : 16
+        isLive ? 4 : 8
     }
 
     open func audioFrameMaxCount(fps: Float, channelCount: Int) -> UInt8 {
@@ -455,32 +455,37 @@ public enum VideoInterlacingType: String {
 }
 
 public extension KSOptions {
-    static var firstPlayerType: MediaPlayerProtocol.Type = KSAVPlayer.self
-    static var secondPlayerType: MediaPlayerProtocol.Type? = KSMEPlayer.self
-    /// 最低缓存视频时间
-    static var preferredForwardBufferDuration = 3.0
-    /// 最大缓存视频时间
-    static var maxBufferDuration = 30.0
-    /// 是否开启秒开
-    static var isSecondOpen = false
-    /// 开启精确seek
-    static var isAccurateSeek = false
-    /// Applies to short videos only
-    static var isLoopPlay = false
+    @MainActor static var firstPlayerType: MediaPlayerProtocol.Type = KSAVPlayer.self
+    @MainActor static var secondPlayerType: MediaPlayerProtocol.Type? = KSMEPlayer.self
+    /// 最低缓存视频时间 — nonisolated(unsafe): used as instance-var default; read from background MEPlayerItem.playable()
+    nonisolated(unsafe) static var preferredForwardBufferDuration = 3.0
+    /// 最大缓存视频时间 — nonisolated(unsafe): used as instance-var default; read from background MEPlayerItem
+    nonisolated(unsafe) static var maxBufferDuration = 10.0
+    /// 是否开启秒开 — nonisolated(unsafe): used as instance-var default
+    nonisolated(unsafe) static var isSecondOpen = false
+    /// 开启精确seek — nonisolated(unsafe): used as instance-var default
+    nonisolated(unsafe) static var isAccurateSeek = false
+    /// Applies to short videos only — nonisolated(unsafe): used as instance-var default
+    nonisolated(unsafe) static var isLoopPlay = false
     /// 是否自动播放，默认true
-    static var isAutoPlay = true
-    /// seek完是否自动播放
-    static var isSeekedAutoPlay = true
-    static var hardwareDecode = true
+    @MainActor static var isAutoPlay = true
+    /// seek完是否自动播放 — nonisolated(unsafe): used as instance-var default
+    nonisolated(unsafe) static var isSeekedAutoPlay = true
+    /// nonisolated(unsafe): used as instance-var default; read during background track setup
+    nonisolated(unsafe) static var hardwareDecode = true
     // 默认不用自研的硬解，因为有些视频的AVPacket的pts顺序是不对的，只有解码后的AVFrame里面的pts是对的。
-    static var asynchronousDecompression = false
-    static var isPipPopViewController = false
-    static var canStartPictureInPictureAutomaticallyFromInline = true
-    static var preferredFrame = true
-    static var useSystemHTTPProxy = true
-    /// 日志级别
-    static var logLevel = LogLevel.warning
-    static var logger: LogHandler = OSLog(lable: "KSPlayer")
+    /// nonisolated(unsafe): used as instance-var default; read during background track setup
+    nonisolated(unsafe) static var asynchronousDecompression = false
+    @MainActor static var isPipPopViewController = false
+    /// nonisolated(unsafe): used as instance-var default
+    nonisolated(unsafe) static var canStartPictureInPictureAutomaticallyFromInline = true
+    @MainActor static var preferredFrame = true
+    /// nonisolated(unsafe): read from MEPlayerItem.openThread() on background OperationQueue; set once at app startup
+    nonisolated(unsafe) static var useSystemHTTPProxy = true
+    /// 日志级别 — nonisolated(unsafe): read from background threads for fast logging
+    nonisolated(unsafe) static var logLevel = LogLevel.warning
+    /// nonisolated(unsafe): read from background threads for fast logging
+    nonisolated(unsafe) static var logger: LogHandler = OSLog(lable: "KSPlayer")
     internal static func deviceCpuCount() -> Int {
         var ncpu = UInt(0)
         var len: size_t = MemoryLayout.size(ofValue: ncpu)

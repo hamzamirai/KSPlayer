@@ -511,7 +511,7 @@ extension AVAssetTrack {
     func toMediaPlayerTrack() {}
 }
 
-class AVMediaPlayerTrack: MediaPlayerTrack {
+class AVMediaPlayerTrack: @preconcurrency MediaPlayerTrack {
     let formatDescription: CMFormatDescription?
     let description: String
     private let track: AVPlayerItemTrack
