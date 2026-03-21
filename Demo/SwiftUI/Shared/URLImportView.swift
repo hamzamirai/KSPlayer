@@ -10,7 +10,7 @@ import KSPlayer
 import SwiftUI
 
 struct URLImportView: View {
-    @EnvironmentObject private var appModel: APPModel
+    @Environment(APPModel.self) private var appModel: APPModel
     @State private var username = ""
     @State private var password = ""
     @State private var playURL: String = ""

@@ -71,41 +71,35 @@ extension KSVideoPlayer: UIViewRepresentable {
     }
 
     @MainActor
-    public final class Coordinator: ObservableObject {
+    @Observable public final class Coordinator {
         public var state: KSPlayerState {
             playerLayer?.state ?? .initialized
         }
 
-        @Published
         public var isMuted: Bool = false {
             didSet {
                 playerLayer?.player.isMuted = isMuted
             }
         }
 
-        @Published
         public var playbackVolume: Float = 1.0 {
             didSet {
                 playerLayer?.player.playbackVolume = playbackVolume
             }
         }
 
-        @Published
         public var isScaleAspectFill = false {
             didSet {
                 playerLayer?.player.contentMode = isScaleAspectFill ? .scaleAspectFill : .scaleAspectFit
             }
         }
 
-        @Published
         public var playbackRate: Float = 1.0 {
             didSet {
                 playerLayer?.player.playbackRate = playbackRate
             }
         }
 
-        @Published
-        @MainActor
         public var isMaskShow = true {
             didSet {
                 if isMaskShow != oldValue {
@@ -203,15 +197,6 @@ extension KSVideoPlayer: UIViewRepresentable {
             }
             #if os(macOS)
             show ? NSCursor.unhide() : NSCursor.setHiddenUntilMouseMoves(true)
-            if let window = playerLayer?.player.view?.window {
-                if !window.styleMask.contains(.fullScreen) {
-                    window.standardWindowButton(.closeButton)?.superview?.superview?.isHidden = !show
-                    //                    window.standardWindowButton(.zoomButton)?.isHidden = !show
-                    //                    window.standardWindowButton(.closeButton)?.isHidden = !show
-                    //                    window.standardWindowButton(.miniaturizeButton)?.isHidden = !show
-                    //                    window.titleVisibility = show ? .visible : .hidden
-                }
-            }
             #endif
         }
     }
@@ -221,7 +206,8 @@ extension KSVideoPlayer.Coordinator: KSPlayerLayerDelegate {
     public func player(layer: KSPlayerLayer, state: KSPlayerState) {
         onStateChanged?(layer, state)
         if state == .readyToPlay {
-            playbackRate = layer.player.playbackRate
+            let rate = layer.player.playbackRate
+            Task { @MainActor [weak self] in self?.playbackRate = rate }
             if let subtitleDataSouce = layer.player.subtitleDataSouce {
                 // 要延后增加内嵌字幕。因为有些内嵌字幕是放在视频流的。所以会比readyToPlay回调晚。
                 DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + 1) { [weak self] in
@@ -233,9 +219,9 @@ extension KSVideoPlayer.Coordinator: KSPlayerLayerDelegate {
                 }
             }
         } else if state == .bufferFinished {
-            isMaskShow = false
+            Task { @MainActor [weak self] in self?.isMaskShow = false }
         } else {
-            isMaskShow = true
+            Task { @MainActor [weak self] in self?.isMaskShow = true }
             #if canImport(UIKit)
             if state == .preparing, let view = layer.player.view {
                 let swipeDown = UISwipeGestureRecognizer(target: self, action: #selector(swipeGestureAction(_:)))
@@ -262,11 +248,13 @@ extension KSVideoPlayer.Coordinator: KSPlayerLayerDelegate {
         }
         let current = Int(currentTime)
         let total = Int(max(0, totalTime))
-        if timemodel.currentTime != current {
-            timemodel.currentTime = current
-        }
-        if timemodel.totalTime != total {
-            timemodel.totalTime = total
+        if timemodel.currentTime != current || timemodel.totalTime != total {
+            let c = current, t = total
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if self.timemodel.currentTime != c { self.timemodel.currentTime = c }
+                if self.timemodel.totalTime != t { self.timemodel.totalTime = t }
+            }
         }
         _ = subtitleModel.subtitle(currentTime: currentTime)
     }
@@ -327,10 +315,8 @@ extension View {
 }
 
 /// 这是一个频繁变化的model。View要少用这个
-public class ControllerTimeModel: ObservableObject {
+@Observable public class ControllerTimeModel {
     // 改成int才不会频繁更新
-    @Published
     public var currentTime = 0
-    @Published
     public var totalTime = 1
 }

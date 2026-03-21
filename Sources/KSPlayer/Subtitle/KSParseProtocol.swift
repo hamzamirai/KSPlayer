@@ -17,7 +17,8 @@ public protocol KSParseProtocol {
 }
 
 public extension KSOptions {
-    static var subtitleParses: [KSParseProtocol] = [AssParse(), VTTParse(), SrtParse()]
+    /// nonisolated(unsafe): read from KSSubtitle.parse(data:encoding:) on background URLSession/Task thread; set at app startup
+    nonisolated(unsafe) static var subtitleParses: [KSParseProtocol] = [AssParse(), VTTParse(), SrtParse()]
 }
 
 public extension String {}

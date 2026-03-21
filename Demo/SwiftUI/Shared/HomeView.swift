@@ -2,7 +2,7 @@ import KSPlayer
 import SwiftUI
 
 struct HomeView: View {
-    @EnvironmentObject
+    @Environment(APPModel.self)
     private var appModel: APPModel
     @State
     private var nameFilter: String = ""
@@ -142,7 +142,7 @@ struct MoiveView: View {
         #endif
     }()
 
-    @ObservedObject var model: MovieModel
+    var model: MovieModel
     var body: some View {
         VStack {
             image

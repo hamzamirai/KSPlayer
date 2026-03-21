@@ -9,9 +9,11 @@ import Foundation
 import KSPlayer
 import SwiftUI
 
-public class Defaults: ObservableObject {
+@Observable public class Defaults {
+    @ObservationIgnored
     @AppStorage("showRecentPlayList") public var showRecentPlayList = false
 
+    @ObservationIgnored
     @AppStorage("hardwareDecode")
     public var hardwareDecode = KSOptions.hardwareDecode {
         didSet {
@@ -19,6 +21,7 @@ public class Defaults: ObservableObject {
         }
     }
 
+    @ObservationIgnored
     @AppStorage("asynchronousDecompression")
     public var asynchronousDecompression = KSOptions.asynchronousDecompression {
         didSet {
@@ -26,6 +29,7 @@ public class Defaults: ObservableObject {
         }
     }
 
+    @ObservationIgnored
     @AppStorage("isUseDisplayLayer")
     public var isUseDisplayLayer = MEOptions.isUseDisplayLayer {
         didSet {
@@ -33,6 +37,7 @@ public class Defaults: ObservableObject {
         }
     }
 
+    @ObservationIgnored
     @AppStorage("preferredForwardBufferDuration")
     public var preferredForwardBufferDuration = KSOptions.preferredForwardBufferDuration {
         didSet {
@@ -40,6 +45,7 @@ public class Defaults: ObservableObject {
         }
     }
 
+    @ObservationIgnored
     @AppStorage("maxBufferDuration")
     public var maxBufferDuration = KSOptions.maxBufferDuration {
         didSet {
@@ -47,6 +53,7 @@ public class Defaults: ObservableObject {
         }
     }
 
+    @ObservationIgnored
     @AppStorage("isLoopPlay")
     public var isLoopPlay = KSOptions.isLoopPlay {
         didSet {
@@ -54,6 +61,7 @@ public class Defaults: ObservableObject {
         }
     }
 
+    @ObservationIgnored
     @AppStorage("canBackgroundPlay")
     public var canBackgroundPlay = true {
         didSet {
@@ -61,6 +69,7 @@ public class Defaults: ObservableObject {
         }
     }
 
+    @ObservationIgnored
     @AppStorage("isAutoPlay")
     public var isAutoPlay = true {
         didSet {
@@ -68,6 +77,7 @@ public class Defaults: ObservableObject {
         }
     }
 
+    @ObservationIgnored
     @AppStorage("isSecondOpen")
     public var isSecondOpen = true {
         didSet {
@@ -75,6 +85,7 @@ public class Defaults: ObservableObject {
         }
     }
 
+    @ObservationIgnored
     @AppStorage("isAccurateSeek")
     public var isAccurateSeek = true {
         didSet {
@@ -82,6 +93,7 @@ public class Defaults: ObservableObject {
         }
     }
 
+    @ObservationIgnored
     @AppStorage("isPipPopViewController")
     public var isPipPopViewController = true {
         didSet {
@@ -89,6 +101,7 @@ public class Defaults: ObservableObject {
         }
     }
 
+    @ObservationIgnored
     @AppStorage("textFontSize")
     public var textFontSize = SubtitleModel.textFontSize {
         didSet {
@@ -96,6 +109,7 @@ public class Defaults: ObservableObject {
         }
     }
 
+    @ObservationIgnored
     @AppStorage("textBold")
     public var textBold = SubtitleModel.textBold {
         didSet {
@@ -103,6 +117,7 @@ public class Defaults: ObservableObject {
         }
     }
 
+    @ObservationIgnored
     @AppStorage("textItalic")
     public var textItalic = SubtitleModel.textItalic {
         didSet {
@@ -110,6 +125,7 @@ public class Defaults: ObservableObject {
         }
     }
 
+    @ObservationIgnored
     @AppStorage("textColor")
     public var textColor = SubtitleModel.textColor {
         didSet {
@@ -117,6 +133,7 @@ public class Defaults: ObservableObject {
         }
     }
 
+    @ObservationIgnored
     @AppStorage("textBackgroundColor")
     public var textBackgroundColor = SubtitleModel.textBackgroundColor {
         didSet {
@@ -124,6 +141,7 @@ public class Defaults: ObservableObject {
         }
     }
 
+    @ObservationIgnored
     @AppStorage("horizontalAlign")
     public var horizontalAlign = SubtitleModel.textPosition.horizontalAlign {
         didSet {
@@ -131,6 +149,7 @@ public class Defaults: ObservableObject {
         }
     }
 
+    @ObservationIgnored
     @AppStorage("verticalAlign")
     public var verticalAlign = SubtitleModel.textPosition.verticalAlign {
         didSet {
@@ -138,6 +157,7 @@ public class Defaults: ObservableObject {
         }
     }
 
+    @ObservationIgnored
     @AppStorage("leftMargin")
     public var leftMargin = SubtitleModel.textPosition.leftMargin {
         didSet {
@@ -145,6 +165,7 @@ public class Defaults: ObservableObject {
         }
     }
 
+    @ObservationIgnored
     @AppStorage("rightMargin")
     public var rightMargin = SubtitleModel.textPosition.rightMargin {
         didSet {
@@ -152,6 +173,7 @@ public class Defaults: ObservableObject {
         }
     }
 
+    @ObservationIgnored
     @AppStorage("verticalMargin")
     public var verticalMargin = SubtitleModel.textPosition.verticalMargin {
         didSet {
@@ -159,6 +181,7 @@ public class Defaults: ObservableObject {
         }
     }
 
+    @ObservationIgnored
     @AppStorage("yadifMode")
     public var yadifMode = MEOptions.yadifMode {
         didSet {
@@ -166,6 +189,7 @@ public class Defaults: ObservableObject {
         }
     }
 
+    @ObservationIgnored
     @AppStorage("audioPlayerType")
     public var audioPlayerType = NSStringFromClass(KSOptions.audioPlayerType) {
         didSet {
@@ -202,7 +226,7 @@ public class Defaults: ObservableObject {
 
 @propertyWrapper
 public struct Default<T>: DynamicProperty {
-    @ObservedObject private var defaults: Defaults
+    private var defaults: Defaults
     private let keyPath: ReferenceWritableKeyPath<Defaults, T>
     public init(_ keyPath: ReferenceWritableKeyPath<Defaults, T>, defaults: Defaults = .shared) {
         self.keyPath = keyPath

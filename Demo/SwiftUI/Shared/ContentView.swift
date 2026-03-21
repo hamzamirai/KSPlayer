@@ -5,7 +5,7 @@ struct ContentView: View {
     #if !os(tvOS)
     @Environment(\.openWindow) private var openWindow
     #endif
-    @EnvironmentObject
+    @Environment(APPModel.self)
     private var appModel: APPModel
     private var initialView: some View {
         #if os(macOS)

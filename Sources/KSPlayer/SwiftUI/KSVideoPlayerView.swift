@@ -14,7 +14,7 @@ public struct KSVideoPlayerView: View {
     private let subtitleDataSouce: SubtitleDataSouce?
     @State
     private var title: String
-    @StateObject
+    @State
     private var playerCoordinator: KSVideoPlayer.Coordinator
     @Environment(\.dismiss)
     private var dismiss
@@ -49,7 +49,7 @@ public struct KSVideoPlayerView: View {
 
     public init(coordinator: KSVideoPlayer.Coordinator, url: State<URL>, options: KSOptions, title: State<String>, subtitleDataSouce: SubtitleDataSouce?) {
         _url = url
-        _playerCoordinator = .init(wrappedValue: coordinator)
+        _playerCoordinator = State(initialValue: coordinator)
         _title = title
         #if os(macOS)
         NSDocumentController.shared.noteNewRecentDocumentURL(url.wrappedValue)
@@ -282,7 +282,8 @@ public struct KSVideoPlayerView: View {
     }
 
     private func ornamentControlsView(playerWidth _: Double) -> some View {
-        HStack {
+        @Bindable var coordinator = playerCoordinator
+        return HStack {
             KSVideoPlayerViewBuilder.playbackControlView(config: playerCoordinator, spacing: 16)
             Spacer()
             VideoTimeShowView(config: playerCoordinator, model: playerCoordinator.timemodel, timeFont: .title3.monospacedDigit())
@@ -290,7 +291,7 @@ public struct KSVideoPlayerView: View {
             Group {
                 KSVideoPlayerViewBuilder.contentModeButton(config: playerCoordinator)
                 KSVideoPlayerViewBuilder.subtitleButton(config: playerCoordinator)
-                KSVideoPlayerViewBuilder.playbackRateButton(playbackRate: $playerCoordinator.playbackRate)
+                KSVideoPlayerViewBuilder.playbackRateButton(playbackRate: $coordinator.playbackRate)
                 KSVideoPlayerViewBuilder.infoButton(showVideoSetting: $showVideoSetting)
             }
             .font(.largeTitle)
@@ -351,9 +352,8 @@ extension View {
 
 @available(iOS 16, tvOS 16, macOS 13, *)
 struct VideoControllerView: View {
-    @ObservedObject
+    @Bindable
     fileprivate var config: KSVideoPlayer.Coordinator
-    @ObservedObject
     fileprivate var subtitleModel: SubtitleModel
     @Binding
     fileprivate var title: String
@@ -553,9 +553,7 @@ public struct MenuView<Label, SelectionValue, Content>: View where Label: View, 
 
 @available(iOS 15, tvOS 15, macOS 12, *)
 struct VideoTimeShowView: View {
-    @ObservedObject
     fileprivate var config: KSVideoPlayer.Coordinator
-    @ObservedObject
     fileprivate var model: ControllerTimeModel
     fileprivate var timeFont: Font?
     public var body: some View {
@@ -592,7 +590,6 @@ extension EventModifiers {
 
 @available(iOS 16, tvOS 16, macOS 13, *)
 struct VideoSubtitleView: View {
-    @ObservedObject
     fileprivate var model: SubtitleModel
     var body: some View {
         ZStack {
@@ -665,9 +662,8 @@ private extension SubtitlePart {
 
 @available(iOS 16, tvOS 16, macOS 13, *)
 struct VideoSettingView: View {
-    @ObservedObject
     fileprivate var config: KSVideoPlayer.Coordinator
-    @ObservedObject
+    @Bindable
     fileprivate var subtitleModel: SubtitleModel
     @State
     fileprivate var subtitleTitle: String
@@ -719,7 +715,6 @@ struct VideoSettingView: View {
 
 @available(iOS 16, tvOS 16, macOS 13, *)
 public struct DynamicInfoView: View {
-    @ObservedObject
     fileprivate var dynamicInfo: DynamicInfo
     public var body: some View {
         LabeledContent("Display FPS", value: dynamicInfo.displayFPS, format: .number)

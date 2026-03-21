@@ -47,7 +47,7 @@ struct TracyApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .environmentObject(appModel)
+                .environment(appModel)
                 .environment(\.managedObjectContext, PersistenceController.shared.viewContext)
             #if !os(tvOS)
                 .handlesExternalEvents(preferring: Set(arrayLiteral: "pause"), allowing: Set(arrayLiteral: "*"))
@@ -144,24 +144,17 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     }
 }
 
-class APPModel: ObservableObject {
-    @Published
+@Observable class APPModel {
     var openURL: URL?
-    @Published
     var openPlayModel: MovieModel?
-    @Published
     var tabSelected: TabBarItem = .Home
-    @Published
     var path = NavigationPath()
-    @Published
     var openFileImport = false
-    @Published
     var openURLImport = false
-    @Published
     var hiddenTitleBar = false
+    @ObservationIgnored
     @AppStorage("activeM3UURL")
     private var activeM3UURL: URL?
-    @Published
     var activeM3UModel: M3UModel? = nil {
         didSet {
             if let activeM3UModel, activeM3UModel != oldValue {
@@ -247,7 +240,7 @@ class APPModel: ObservableObject {
 struct KSVideoPlayerView_Previews: PreviewProvider {
     static var previews: some View {
         ContentView()
-            .environmentObject(APPModel())
+            .environment(APPModel())
             .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
     }
 }

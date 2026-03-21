@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct FavoriteView: View {
-    @EnvironmentObject
+    @Environment(APPModel.self)
     private var appModel: APPModel
     @State
     private var nameFilter: String = ""

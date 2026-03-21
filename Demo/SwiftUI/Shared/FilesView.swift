@@ -14,7 +14,7 @@ struct FilesView: View {
         predicate: NSPredicate(format: "m3uURL != nil && name != nil")
     )
     private var m3uModels: FetchedResults<M3UModel>
-    @EnvironmentObject
+    @Environment(APPModel.self)
     private var appModel: APPModel
     @State
     private var addM3U = false
@@ -85,7 +85,6 @@ struct FilesView: View {
 }
 
 struct M3UView: View {
-    @ObservedObject
     var model: M3UModel
     var body: some View {
         VStack(alignment: .leading) {
@@ -140,7 +139,7 @@ struct AddM3UView: View {
     #endif
     @State
     private var name = ""
-    @EnvironmentObject private var appModel: APPModel
+    @Environment(APPModel.self) private var appModel: APPModel
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         Form {

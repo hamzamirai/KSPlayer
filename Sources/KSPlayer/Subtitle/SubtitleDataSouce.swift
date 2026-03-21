@@ -16,7 +16,7 @@ public class EmptySubtitleInfo: SubtitleInfo {
     }
 }
 
-public class URLSubtitleInfo: KSSubtitle, SubtitleInfo {
+public class URLSubtitleInfo: KSSubtitle, SubtitleInfo, @unchecked Sendable {
     public var isEnabled: Bool = false {
         didSet {
             if isEnabled, parts.isEmpty {
@@ -77,11 +77,11 @@ public protocol SearchSubtitleDataSouce: SubtitleDataSouce {
 }
 
 public extension KSOptions {
-    static var subtitleDataSouces: [SubtitleDataSouce] = [DirectorySubtitleDataSouce()]
+    @MainActor static var subtitleDataSouces: [SubtitleDataSouce] = [DirectorySubtitleDataSouce()]
 }
 
 public class PlistCacheSubtitleDataSouce: CacheSubtitleDataSouce {
-    public static let singleton = PlistCacheSubtitleDataSouce()
+    @MainActor public static let singleton = PlistCacheSubtitleDataSouce()
     public var infos = [any SubtitleInfo]()
     private let srtCacheInfoPath: String
     // 因为plist不能保存URL
