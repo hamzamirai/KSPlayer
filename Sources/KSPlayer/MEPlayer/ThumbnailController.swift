@@ -12,7 +12,7 @@ import Libavformat
 #if canImport(UIKit)
 import UIKit
 #endif
-public struct FFThumbnail {
+public struct FFThumbnail: @unchecked Sendable {
     public let image: UIImage
     public let time: TimeInterval
 }
@@ -21,7 +21,7 @@ public protocol ThumbnailControllerDelegate: AnyObject {
     func didUpdate(thumbnails: [FFThumbnail], forFile file: URL, withProgress: Int)
 }
 
-public class ThumbnailController {
+public class ThumbnailController: @unchecked Sendable {
     public weak var delegate: ThumbnailControllerDelegate?
     private let thumbnailCount: Int
     public init(thumbnailCount: Int = 100) {

@@ -156,6 +156,12 @@ public extension UIColor {
     }
 }
 
+private struct ExportContext: @unchecked Sendable {
+    let asset: AVAsset
+    let progress: (Double) -> Void
+    let completion: (Result<URL, Error>) -> Void
+}
+
 extension AVAsset {
     public func generateGIF(beginTime: TimeInterval, endTime: TimeInterval, interval: Double = 0.2, savePath: URL, progress: @escaping (Double) -> Void, completion: @escaping (Error?) -> Void) {
         let count = Int(ceil((endTime - beginTime) / interval))
@@ -224,20 +230,21 @@ extension AVAsset {
 
     func exportMp4(beginTime: TimeInterval, endTime: TimeInterval, outputURL: URL, progress: @escaping (Double) -> Void, completion: @escaping (Result<URL, Error>) -> Void) throws {
         try FileManager.default.removeItem(at: outputURL)
+        let context = ExportContext(asset: self, progress: progress, completion: completion)
         Task {
-            guard let exportSession = try await createExportSession(beginTime: beginTime, endTime: endTime) else { return }
+            guard let exportSession = try await context.asset.createExportSession(beginTime: beginTime, endTime: endTime) else { return }
             exportSession.outputURL = outputURL
             await exportSession.export()
             switch exportSession.status {
             case .exporting:
-                progress(Double(exportSession.progress))
+                context.progress(Double(exportSession.progress))
             case .completed:
-                progress(1)
-                completion(.success(outputURL))
+                context.progress(1)
+                context.completion(.success(outputURL))
                 exportSession.cancelExport()
             case .failed:
                 if let error = exportSession.error {
-                    completion(.failure(error))
+                    context.completion(.failure(error))
                 }
                 exportSession.cancelExport()
             case .cancelled:
@@ -352,13 +359,11 @@ func - (left: CGSize, right: CGSize) -> CGSize {
 @inline(__always)
 @preconcurrency
 // @MainActor
-public func runOnMainThread(block: @escaping () -> Void) {
+public func runOnMainThread(block: @escaping @Sendable () -> Void) {
     if Thread.isMainThread {
         block()
     } else {
-        Task {
-            await MainActor.run(body: block)
-        }
+        DispatchQueue.main.async(execute: block)
     }
 }
 

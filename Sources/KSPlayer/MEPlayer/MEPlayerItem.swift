@@ -11,7 +11,7 @@ import Libavcodec
 import Libavfilter
 import Libavformat
 
-public final class MEPlayerItem: Sendable {
+public final class MEPlayerItem: @unchecked Sendable {
     private let url: URL
     private let options: KSOptions
     private let operationQueue = OperationQueue()
@@ -91,7 +91,7 @@ public final class MEPlayerItem: Sendable {
         Int(8 * (self?.videoTrack?.bitrate ?? 0))
     }
 
-    private static var onceInitial: Void = {
+    private static let onceInitial: Void = {
         var result = avformat_network_init()
         av_log_set_callback { ptr, level, format, args in
             guard let format else {
@@ -152,7 +152,7 @@ public final class MEPlayerItem: Sendable {
                 return false
             }
         }
-        seek(time: currentPlaybackTime) { _ in
+        seekCore(time: currentPlaybackTime) { _ in
         }
         return true
     }
@@ -675,7 +675,10 @@ extension MEPlayerItem: MediaPlayback {
         }
     }
 
-    public func seek(time: TimeInterval, completion: @escaping ((Bool) -> Void)) {
+    // Internal seek implementation callable from any isolation context.
+    // The @MainActor `seek(time:completion:)` below satisfies the MediaPlayback protocol
+    // requirement and simply delegates here to allow nonisolated internal callers.
+    private func seekCore(time: TimeInterval, completion: @escaping ((Bool) -> Void)) {
         if state == .reading || state == .paused {
             seekTime = time
             state = .seeking
@@ -692,6 +695,10 @@ extension MEPlayerItem: MediaPlayback {
             seekingCompletionHandler = completion
         }
         isAudioStalled = audioTrack == nil
+    }
+
+    public func seek(time: TimeInterval, completion: @escaping ((Bool) -> Void)) {
+        seekCore(time: time, completion: completion)
     }
 }
 
@@ -727,7 +734,7 @@ extension MEPlayerItem: CodecCapacityDelegate {
                 audioTrack?.isLoopModel = false
                 videoTrack?.isLoopModel = false
                 if state == .finished {
-                    seek(time: 0) { _ in }
+                    seekCore(time: 0) { _ in }
                 }
             }
         }
