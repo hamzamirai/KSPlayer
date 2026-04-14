@@ -106,7 +106,7 @@ public extension MediaPlayerProtocol {
 }
 
 @MainActor
-public protocol MediaPlayerDelegate: AnyObject {
+public protocol MediaPlayerDelegate: AnyObject, Sendable {
     func readyToPlay(player: some MediaPlayerProtocol)
     func changeLoadState(player: some MediaPlayerProtocol)
     // 缓冲加载进度，0-100

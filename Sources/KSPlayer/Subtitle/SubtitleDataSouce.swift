@@ -60,7 +60,7 @@ public class URLSubtitleInfo: KSSubtitle, SubtitleInfo, @unchecked Sendable {
     }
 }
 
-public protocol SubtitleDataSouce: AnyObject {
+public protocol SubtitleDataSouce: AnyObject, Sendable {
     var infos: [any SubtitleInfo] { get }
 }
 
@@ -80,7 +80,7 @@ public extension KSOptions {
     @MainActor static var subtitleDataSouces: [SubtitleDataSouce] = [DirectorySubtitleDataSouce()]
 }
 
-public class PlistCacheSubtitleDataSouce: CacheSubtitleDataSouce {
+public final class PlistCacheSubtitleDataSouce: CacheSubtitleDataSouce, @unchecked Sendable {
     @MainActor public static let singleton = PlistCacheSubtitleDataSouce()
     public var infos = [any SubtitleInfo]()
     private let srtCacheInfoPath: String
@@ -133,14 +133,14 @@ public class PlistCacheSubtitleDataSouce: CacheSubtitleDataSouce {
     }
 }
 
-public class URLSubtitleDataSouce: SubtitleDataSouce {
+public final class URLSubtitleDataSouce: SubtitleDataSouce, @unchecked Sendable {
     public var infos: [any SubtitleInfo]
     public init(urls: [URL]) {
         infos = urls.map { URLSubtitleInfo(url: $0) }
     }
 }
 
-public class DirectorySubtitleDataSouce: FileURLSubtitleDataSouce {
+public final class DirectorySubtitleDataSouce: FileURLSubtitleDataSouce, @unchecked Sendable {
     public var infos = [any SubtitleInfo]()
     public init() {}
 
@@ -158,7 +158,7 @@ public class DirectorySubtitleDataSouce: FileURLSubtitleDataSouce {
     }
 }
 
-public class ShooterSubtitleDataSouce: FileURLSubtitleDataSouce {
+public final class ShooterSubtitleDataSouce: FileURLSubtitleDataSouce, @unchecked Sendable {
     public var infos = [any SubtitleInfo]()
     public init() {}
     public func searchSubtitle(fileURL: URL?) async throws {
@@ -193,7 +193,7 @@ public class ShooterSubtitleDataSouce: FileURLSubtitleDataSouce {
     }
 }
 
-public class AssrtSubtitleDataSouce: SearchSubtitleDataSouce {
+public final class AssrtSubtitleDataSouce: SearchSubtitleDataSouce, @unchecked Sendable {
     private let token: String
     public var infos = [any SubtitleInfo]()
     public init(token: String) {
@@ -263,7 +263,7 @@ public class AssrtSubtitleDataSouce: SearchSubtitleDataSouce {
     }
 }
 
-public class OpenSubtitleDataSouce: SearchSubtitleDataSouce {
+public final class OpenSubtitleDataSouce: SearchSubtitleDataSouce, @unchecked Sendable {
     private var token: String? = nil
     private let username: String?
     private let password: String?

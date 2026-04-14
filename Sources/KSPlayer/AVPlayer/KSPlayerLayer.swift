@@ -23,7 +23,7 @@ import AppKit
  - playedToTheEnd: played to the End
  - error:          error with playing
  */
-public enum KSPlayerState: CustomStringConvertible {
+public enum KSPlayerState: CustomStringConvertible, Sendable {
     case initialized
     case preparing
     case readyToPlay
@@ -57,7 +57,7 @@ public enum KSPlayerState: CustomStringConvertible {
 }
 
 @MainActor
-public protocol KSPlayerLayerDelegate: AnyObject {
+public protocol KSPlayerLayerDelegate: AnyObject, Sendable {
     func player(layer: KSPlayerLayer, state: KSPlayerState)
     func player(layer: KSPlayerLayer, currentTime: TimeInterval, totalTime: TimeInterval)
     func player(layer: KSPlayerLayer, finish error: Error?)
@@ -198,7 +198,13 @@ open class KSPlayerLayer: NSObject {
     private var shouldSeekTo: TimeInterval = 0
     private var startTime: TimeInterval = 0
     private var lastNowPlayingUpdate: TimeInterval = 0
-    public init(url: URL, isAutoPlay: Bool = KSOptions.isAutoPlay, options: KSOptions, delegate: KSPlayerLayerDelegate? = nil) {
+    
+    public init(
+        url: URL,
+        isAutoPlay: Bool = KSOptions.isAutoPlay,
+        options: KSOptions,
+        delegate: KSPlayerLayerDelegate? = nil
+    ) {
         self.url = url
         self.options = options
         self.delegate = delegate
